@@ -85,6 +85,16 @@ export function formatRequestBodySchema(requestBody: unknown): string {
   return `Request body:\n${renderTable(['Campo', 'Tipo'], fields.map(f => [f.name, f.type]))}`;
 }
 
+function parseFilterableFields(description: string | undefined): { field: string; operators: string }[] {
+  if (!description) return [];
+  const match = description.match(/\*\*Filterable fields:\*\*\n([\s\S]*?)(?:\n\n|$)/);
+  if (!match) return [];
+  return [...match[1].matchAll(/^- `([^`]+)`:\s*(.+)$/gm)].map(m => ({
+    field: m[1],
+    operators: m[2].trim(),
+  }));
+}
+
 export function formatEndpoint(
   method: string,
   path: string,
@@ -108,6 +118,13 @@ export function formatEndpoint(
   const r200 = op.responses?.['200'];
   if (r200) {
     lines.push(formatResponseSchema(r200));
+  }
+
+  const filterFields = parseFilterableFields(op.description);
+  if (filterFields.length) {
+    lines.push('');
+    lines.push('Filterable fields (parámetro filter):');
+    lines.push(renderTable(['Campo', 'Operadores'], filterFields.map(f => [f.field, f.operators])));
   }
 
   return lines.join('\n').trim();
