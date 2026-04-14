@@ -5,6 +5,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { listTags, listTagsToolDef } from './tools/list-tags.js';
 import { listEndpoints, listEndpointsToolDef } from './tools/list-endpoints.js';
@@ -33,28 +34,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const input = (args ?? {}) as Record<string, string>;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type AnyResult = any;
+  const result = (() => {
+    switch (name) {
+      case 'listTags':
+        return listTags();
+      case 'listEndpoints':
+        return listEndpoints(input);
+      case 'searchEndpoints':
+        return searchEndpoints(input as { query: string });
+      case 'getEndpoint':
+        return getEndpoint(input as { path: string; method: string });
+      case 'getSchema':
+        return getSchema(input as { name: string });
+      case 'switchEnv':
+        return switchEnv(input as { env: string });
+      default:
+        return Promise.resolve({
+          isError: true,
+          content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],
+        });
+    }
+  })();
 
-  switch (name) {
-    case 'listTags':
-      return listTags() as AnyResult;
-    case 'listEndpoints':
-      return listEndpoints(input) as AnyResult;
-    case 'searchEndpoints':
-      return searchEndpoints(input as { query: string }) as AnyResult;
-    case 'getEndpoint':
-      return getEndpoint(input as { path: string; method: string }) as AnyResult;
-    case 'getSchema':
-      return getSchema(input as { name: string }) as AnyResult;
-    case 'switchEnv':
-      return switchEnv(input as { env: string }) as AnyResult;
-    default:
-      return {
-        isError: true,
-        content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],
-      } as AnyResult;
-  }
+  return result as unknown as Promise<CallToolResult>;
 });
 
 const transport = new StdioServerTransport();
