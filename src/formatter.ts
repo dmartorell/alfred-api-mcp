@@ -38,6 +38,34 @@ function extractProperties(schema: unknown): { name: string; type: string }[] {
   return Object.entries(props).map(([name, val]) => ({ name, type: schemaType(val) }));
 }
 
+function extractNestedObjects(
+  schema: unknown,
+  parentPath = '',
+): { path: string; props: { name: string; type: string }[] }[] {
+  if (!schema || typeof schema !== 'object') return [];
+  const s = schema as Record<string, unknown>;
+  if (s.type === 'array' && s.items) return extractNestedObjects(s.items, parentPath);
+  const props = s.properties as Record<string, unknown> | undefined;
+  if (!props) return [];
+
+  const result: { path: string; props: { name: string; type: string }[] }[] = [];
+  for (const [name, val] of Object.entries(props)) {
+    const v = val as Record<string, unknown>;
+    const fullPath = parentPath ? `${parentPath}.${name}` : name;
+    if (v.type === 'object' && v.properties) {
+      result.push({ path: fullPath, props: extractProperties(val) });
+      result.push(...extractNestedObjects(val, fullPath));
+    } else if (v.type === 'array' && v.items) {
+      const items = v.items as Record<string, unknown>;
+      if (items.type === 'object' && items.properties) {
+        result.push({ path: `${fullPath}[]`, props: extractProperties(items) });
+        result.push(...extractNestedObjects(items, `${fullPath}[]`));
+      }
+    }
+  }
+  return result;
+}
+
 function schemaFromContent(obj: unknown): unknown {
   if (!obj || typeof obj !== 'object') return undefined;
   const o = obj as Record<string, unknown>;
@@ -74,7 +102,16 @@ export function formatResponseSchema(response: unknown): string {
 
   const fields = extractProperties(targetSchema);
   if (!fields.length) return `${prefix}\n(sin campos)`;
-  return `${prefix}\n${renderTable(['Campo', 'Tipo'], fields.map(f => [f.name, f.type]))}`;
+
+  const parts: string[] = [
+    `${prefix}\n${renderTable(['Campo', 'Tipo'], fields.map(f => [f.name, f.type]))}`,
+  ];
+  for (const { path, props } of extractNestedObjects(targetSchema)) {
+    if (props.length) {
+      parts.push(`${path}:\n${renderTable(['Campo', 'Tipo'], props.map(f => [f.name, f.type]))}`);
+    }
+  }
+  return parts.join('\n\n');
 }
 
 export function formatRequestBodySchema(requestBody: unknown): string {
@@ -82,7 +119,16 @@ export function formatRequestBodySchema(requestBody: unknown): string {
   if (!rawSchema) return '(sin schema)';
   const fields = extractProperties(rawSchema);
   if (!fields.length) return '(sin campos)';
-  return `Request body:\n${renderTable(['Campo', 'Tipo'], fields.map(f => [f.name, f.type]))}`;
+
+  const parts: string[] = [
+    `Request body:\n${renderTable(['Campo', 'Tipo'], fields.map(f => [f.name, f.type]))}`,
+  ];
+  for (const { path, props } of extractNestedObjects(rawSchema)) {
+    if (props.length) {
+      parts.push(`${path}:\n${renderTable(['Campo', 'Tipo'], props.map(f => [f.name, f.type]))}`);
+    }
+  }
+  return parts.join('\n\n');
 }
 
 function parseFilterableFields(description: string | undefined): { field: string; operators: string }[] {
