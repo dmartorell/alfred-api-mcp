@@ -1,4 +1,5 @@
 import { getSpec } from '../spec-loader.js';
+import { resolveRefs } from '../resolve-refs.js';
 import type { ToolResult } from '../types.js';
 import type { OpenAPIV3 } from 'openapi-types';
 
@@ -7,6 +8,12 @@ interface GetEndpointInput {
   method: string;
   compact?: boolean;
   section?: string;
+  resolve?: boolean;
+}
+
+function output(value: unknown, spec: OpenAPIV3.Document, resolve: boolean): ToolResult {
+  const data = resolve ? resolveRefs(value, spec) : value;
+  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
 }
 
 export async function getEndpoint(input: GetEndpointInput): Promise<ToolResult> {
@@ -30,12 +37,14 @@ export async function getEndpoint(input: GetEndpointInput): Promise<ToolResult> 
     };
   }
 
+  const resolve = input.resolve ?? false;
+
   if (input.section) {
     if (input.section === 'requestBody') {
       if (!op.requestBody) {
         return { content: [{ type: 'text', text: `No request body for ${input.method.toUpperCase()} ${input.path}` }] };
       }
-      return { content: [{ type: 'text', text: JSON.stringify(op.requestBody, null, 2) }] };
+      return output(op.requestBody, spec, resolve);
     }
 
     if (input.section.startsWith('responses.')) {
@@ -44,11 +53,11 @@ export async function getEndpoint(input: GetEndpointInput): Promise<ToolResult> 
       if (!response) {
         return { content: [{ type: 'text', text: `No response ${code} for ${input.method.toUpperCase()} ${input.path}` }] };
       }
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+      return output(response, spec, resolve);
     }
 
     if (input.section === 'parameters') {
-      return { content: [{ type: 'text', text: JSON.stringify(op.parameters ?? [], null, 2) }] };
+      return output(op.parameters ?? [], spec, resolve);
     }
 
     return {
@@ -59,14 +68,10 @@ export async function getEndpoint(input: GetEndpointInput): Promise<ToolResult> 
 
   if (input.compact) {
     const { responses: _responses, ...rest } = op;
-    return {
-      content: [{ type: 'text', text: JSON.stringify(rest, null, 2) }],
-    };
+    return output(rest, spec, resolve);
   }
 
-  return {
-    content: [{ type: 'text', text: JSON.stringify(op, null, 2) }],
-  };
+  return output(op, spec, resolve);
 }
 
 export const getEndpointToolDef = {
@@ -86,6 +91,10 @@ export const getEndpointToolDef = {
       compact: {
         type: 'boolean',
         description: 'If true, omits all response schemas. Use when you only need request parameters/body.',
+      },
+      resolve: {
+        type: 'boolean',
+        description: 'If true, resolves $ref pointers inline. Use with section to see the full expanded schema without references.',
       },
     },
     required: ['path', 'method'],
