@@ -25,7 +25,8 @@ export async function searchEndpoints(input: SearchEndpointsInput): Promise<Tool
         ...(op.tags ?? []),
       ].join(' ').toLowerCase();
 
-      if (searchable.includes(q)) {
+      const words = q.split(/\s+/).filter(Boolean);
+      if (words.every(w => searchable.includes(w))) {
         results.push(`${method.toUpperCase()} ${pathKey}${op.summary ? ` — ${op.summary}` : ''}`);
       }
     }

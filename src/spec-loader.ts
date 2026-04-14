@@ -31,7 +31,7 @@ export async function getSpec(): Promise<OpenAPIV3.Document> {
   const { username, password } = activeCredentials ?? config;
   const authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
-  cachedSpec = (await SwaggerParser.dereference(url, {
+  cachedSpec = (await SwaggerParser.bundle(url, {
     resolve: {
       http: {
         headers: { Authorization: authHeader },
