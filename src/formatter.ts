@@ -76,7 +76,7 @@ function schemaFromContent(obj: unknown): unknown {
 }
 
 export function formatParameters(params: unknown[]): string {
-  const filtered = (params as OpenAPIV3.ParameterObject[]).filter(p => p.name);
+  const filtered = (params as OpenAPIV3.ParameterObject[]).filter(p => p.name && p.in !== 'header');
   if (!filtered.length) return '(sin parámetros)';
   const rows = filtered.map(p => [p.name, p.in, schemaType(p.schema), p.required ? 'sí' : 'no']);
   return renderTable(['Nombre', 'In', 'Tipo', 'Requerido'], rows);
