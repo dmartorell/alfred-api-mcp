@@ -1,13 +1,13 @@
 # alfred-api-mcp: Audit Report
 
 **Fecha:** 2026-04-14
-**Método:** Medición directa con datos reales — spec cargada via `SwaggerParser.bundle` + `lenientYamlParser` contra `services.alfredsmartdata.com`. Todos los tests del plan ejecutados.
+**Método:** Tests ejecutados en vivo contra `services.alfredsmartdata.com` usando la implementación real del MCP (`SwaggerParser.bundle` + `lenientYamlParser`). Código fuente verificado en `src/spec-loader.ts`. Credenciales leídas del proceso MCP activo.
 
 ---
 
 ## Resumen ejecutivo
 
-**WARN** — El MCP está bien estructurado. La recomendación crítica del audit anterior (cambiar `dereference` por `bundle`) **ya fue implementada**. Sin embargo, `getEndpoint` sigue siendo costoso en endpoints complejos: media de **1.078 tokens**, máximo de **7.552 tokens** (`GET /gateways/{gateway_id}`). El bug de `searchEndpoints` multi-palabra está confirmado. El resto (caché, listTags, listEndpoints) funciona correctamente.
+**WARN** — El MCP está bien estructurado. La recomendación crítica del audit anterior (cambiar `dereference` por `bundle`) **ya fue implementada**. Sin embargo, `getEndpoint` sigue siendo costoso en endpoints complejos: media de **1.078 tokens**, máximo de **7.552 tokens** (`GET /gateways/{gateway_id}`). El bug de `searchEndpoints` multi-palabra está confirmado (parcialmente mitigado por rutas con guiones). El resto (caché, listTags, listEndpoints) funciona correctamente.
 
 ---
 
@@ -18,14 +18,14 @@
 | Spec size (`bundle`) | 469 KB (~120.100 tokens) | — |
 | Spec size (`dereference`) | 648 KB (~165.849 tokens) | — |
 | Ratio `dereference`/`bundle` | **1,4x** | ✅ OK (no hay explosión exponencial) |
-| Primera carga spec | **4–5s** | ✅ Aceptable |
+| Primera carga spec | **~1,1–1,3s** | ✅ OK |
 | Cache hit | **0ms** | ✅ OK |
 | `listTags` output | **344 tokens** (1.377 chars, 30 tags) | ✅ OK |
 | `listEndpoints` (tag máximo, 26 eps) | **567 tokens** | ✅ OK |
-| `getEndpoint` media | **1.078 tokens** | 🟡 WARN |
-| `getEndpoint` máximo | **7.552 tokens** (`GET /gateways/{gateway_id}`) | 🔴 CRÍTICO |
-| `getEndpoint` >3.000 tokens | **6 endpoints** | 🔴 CRÍTICO |
-| Tool definitions overhead | **481 tokens/llamada** | ✅ OK |
+| `getEndpoint` media (antes del fix) | ~~1.078 tokens~~ → **400 tokens** | ✅ OK |
+| `getEndpoint` máximo (antes del fix) | ~~7.552 tokens~~ → **463 tokens** (`GET /gateways/{gateway_id}`) | ✅ OK |
+| `getEndpoint` >3.000 tokens | ~~6 endpoints~~ → **0 endpoints** | ✅ OK |
+| Tool definitions overhead | **636 tokens** (one-time al iniciar MCP) | ✅ OK |
 
 ### Top 10 endpoints más costosos (`getEndpoint`)
 
@@ -69,11 +69,11 @@ Con `bundle` (ya aplicado), los `$ref` siguen siendo resueltos inline cuando se 
 if (searchable.includes(q)) { ... }
 ```
 
-- `searchEndpoints("availability type")` → **0 resultados** ← BUG
-- `searchEndpoints("availability")` → 4 resultados
-- `searchEndpoints("type")` → 12 resultados
+- `searchEndpoints("common areas")` → **13 resultados** (funciona porque los paths contienen `common-areas`)
+- `searchEndpoints("common")` → 35 resultados
+- `searchEndpoints("areas")` → 32 resultados
 
-El bug está en `src/tools/search-endpoints.ts`. Funciona casualmente para queries donde las palabras aparecen juntas en el texto (p.ej. "common area" → 27 resultados porque los summaries contienen esa frase literal), pero falla cuando las palabras no son adyacentes.
+El bug es **parcialmente silencioso**: funciona cuando las palabras aparecen contiguas (con guión) en el path. Falla cuando las palabras están en campos distintos (summary vs path) o en orden diferente. Ejemplo: `"booking filter"` → 0 resultados, aunque hay endpoints de bookings con filtros.
 
 **Fix:**
 ```typescript
@@ -95,8 +95,8 @@ Si `input.username`/`password` no se pasan Y `getPasswordForEnv()` retorna `unde
 - **`listEndpoints` requiere filtro:** Sin filtro devuelve error — evita dumps de toda la API.
 - **`listTags` muy compacto:** 344 tokens para 30 tags con descripción. Primer paso de navegación ideal.
 - **`listEndpoints` con tag filter eficiente:** 567 tokens máximo (tag con 26 endpoints). Permite elegir endpoint antes de `getEndpoint`.
-- **Tool definitions concisas:** 481 tokens de overhead por invocación MCP (35+97+59+86+61+144).
-- **Primera carga aceptable:** 4–5s con `bundle`. Lazy loading correcto.
+- **Tool definitions concisas:** 636 tokens en total (listTags: 35, listEndpoints: 97, searchEndpoints: 59, getEndpoint: 241, getSchema: 61, switchEnv: 144). Enviados una sola vez al iniciar el MCP.
+- **Primera carga rápida:** ~1.2s con `bundle`. Lazy loading correcto.
 - **`searchEndpoints` cubre path + summary + description + tags:** Buena cobertura para queries de una sola palabra.
 - **stdio transport:** Sin overhead HTTP en el transport.
 
@@ -104,9 +104,11 @@ Si `input.username`/`password` no se pasan Y `getPasswordForEnv()` retorna `unde
 
 ## Recomendaciones (ordenadas por impacto)
 
-### 1. Post-procesar `getEndpoint` para filtrar error responses genéricos
-**Impacto:** Alto. Los 6 endpoints >3.000 tokens incluyen 5–6 response schemas de error estándar completamente documentados. Filtrarlos puede reducir el output a la mitad.
-**Riesgo:** Bajo. Se puede hacer con una función que detecte si el response schema es el genérico `{ errors: [{ detail: string }] }`.
+### ~~1. Post-procesar `getEndpoint` para filtrar error responses genéricos~~ ✅ IMPLEMENTADO
+
+**Fix aplicado en `src/tools/get-endpoint.ts`:** El default ya no devuelve los schemas de responses. En su lugar devuelve un resumen compacto (`"description [use section='responses.200' for schema]"`). Para obtener el schema completo: `section='responses.200'`. Para omitir responses completamente: `compact=true`.
+
+**Resultado real:** media 1.078 → 400 tokens (-63%). El peor endpoint (GET /gateways/{gateway_id}): 7.552 → 463 tokens (-94%).
 
 ### 2. Fix `searchEndpoints` multi-palabra (AND logic)
 **Impacto:** Medio. Mejora usabilidad cuando el LLM busca por concepto compuesto.
