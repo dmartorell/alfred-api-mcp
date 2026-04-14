@@ -5,6 +5,7 @@ import { getConfig } from './config.js';
 
 let cachedSpec: OpenAPIV3.Document | null = null;
 let activeUrl: string | null = null;
+let activeCredentials: { username: string; password: string } | null = null;
 
 const lenientYamlParser = {
   order: 200,
@@ -25,8 +26,9 @@ const lenientYamlParser = {
 export async function getSpec(): Promise<OpenAPIV3.Document> {
   if (cachedSpec) return cachedSpec;
 
-  const { specUrl, username, password } = getConfig();
-  const url = activeUrl ?? specUrl;
+  const config = getConfig();
+  const url = activeUrl ?? config.specUrl;
+  const { username, password } = activeCredentials ?? config;
   const authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
   cachedSpec = (await SwaggerParser.dereference(url, {
@@ -44,6 +46,11 @@ export async function getSpec(): Promise<OpenAPIV3.Document> {
 }
 
 export function clearCache(): void {
+  cachedSpec = null;
+}
+
+export function setCredentials(username: string, password: string): void {
+  activeCredentials = { username, password };
   cachedSpec = null;
 }
 

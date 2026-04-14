@@ -47,7 +47,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'getSchema':
         return getSchema(input as { name: string });
       case 'switchEnv':
-        return switchEnv(input as { env: string });
+        return switchEnv(input as { env: string; username?: string; password?: string });
       default:
         return Promise.resolve({
           isError: true,

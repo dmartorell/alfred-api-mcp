@@ -1,10 +1,12 @@
-import { getSpec, setSpecUrl } from '../spec-loader.js';
+import { getSpec, setSpecUrl, setCredentials } from '../spec-loader.js';
 import { getEnvUrl, isValidEnv } from '../config.js';
 import { ENV_NAMES } from '../types.js';
 import type { ToolResult } from '../types.js';
 
 interface SwitchEnvInput {
   env: string;
+  username?: string;
+  password?: string;
 }
 
 export async function switchEnv(input: SwitchEnvInput): Promise<ToolResult> {
@@ -20,6 +22,10 @@ export async function switchEnv(input: SwitchEnvInput): Promise<ToolResult> {
 
   const newUrl = getEnvUrl(input.env);
   setSpecUrl(newUrl);
+
+  if (input.username && input.password) {
+    setCredentials(input.username, input.password);
+  }
 
   const spec = await getSpec();
   const endpointCount = Object.values(spec.paths ?? {}).reduce((sum, pathItem) => {
@@ -42,6 +48,8 @@ export const switchEnvToolDef = {
     type: 'object' as const,
     properties: {
       env: { type: 'string', description: `Environment name: ${ENV_NAMES.join(', ')}` },
+      username: { type: 'string', description: 'Override Basic Auth username' },
+      password: { type: 'string', description: 'Override Basic Auth password' },
     },
     required: ['env'],
   },
