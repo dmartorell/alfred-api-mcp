@@ -6,17 +6,23 @@ MCP server que expone el swagger interno de Alfred a Claude Code.
 
 ### 1. Credenciales
 
-Copia las credenciales de Psono (entrada "alfred-api-mcp") a tu `.env` en `alfredverticalsapp-gsd`:
+En el proyecto `alfredverticalsapp-gsd`, copia la plantilla de configuración:
 
-```
-OPENAPI_SPEC_URL=https://services.testing6.alfredstaging.com/internal-docs/internal-api-gateway.yaml
-OPENAPI_USERNAME=<usuario>
-OPENAPI_PASSWORD=<contraseña>
+```bash
+cp .claude/settings.local.example.json .claude/settings.local.json
 ```
 
-### 2. Verificar que el MCP funciona
+El archivo `settings.local.example.json` ya incluye las credenciales del equipo. El archivo `settings.local.json` es local y no se commitea.
 
-En el proyecto `alfredverticalsapp-gsd`, lanza Claude Code. Ejecuta:
+> Las credenciales también están en Psono (entrada "alfred-api-mcp") por si necesitas cambiar de entorno o regenerarlas.
+
+### 2. Activar el MCP
+
+Reinicia Claude Code en `alfredverticalsapp-gsd`. Ejecuta `/mcp` — `alfred-api` debe aparecer sin warnings.
+
+### 3. Verificar que el MCP funciona
+
+Ejecuta:
 
 ```
 listTags
@@ -24,9 +30,9 @@ listTags
 
 Deberías ver la lista de tags del API de Alfred.
 
-### 3. Verificar error de credenciales
+### 4. Verificar error de credenciales
 
-Pon una contraseña incorrecta en `.env`. Lanza Claude Code y ejecuta `listTags`. Deberías ver un error claro de autenticación (401), no un crash silencioso.
+Edita `settings.local.json` y cambia la contraseña por una incorrecta. Reinicia Claude Code y ejecuta `listTags`. Deberías ver un error claro de autenticación (401), no un crash silencioso.
 
 ## Tools disponibles
 
