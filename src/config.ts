@@ -39,6 +39,11 @@ export function getEnvUrl(env: EnvName): string {
   return ENV_URLS[env];
 }
 
+export function getPasswordForEnv(env: EnvName): string | undefined {
+  if (env === 'prod') return process.env.OPENAPI_PASSWORD;
+  return process.env.OPENAPI_TESTING_PASSWORD ?? process.env.OPENAPI_PASSWORD;
+}
+
 export function isValidEnv(env: string): env is EnvName {
   return (ENV_NAMES as readonly string[]).includes(env);
 }

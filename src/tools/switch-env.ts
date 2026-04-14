@@ -1,7 +1,7 @@
 import { getSpec, setSpecUrl, setCredentials } from '../spec-loader.js';
-import { getEnvUrl, isValidEnv } from '../config.js';
+import { getConfig, getEnvUrl, getPasswordForEnv, isValidEnv } from '../config.js';
 import { ENV_NAMES } from '../types.js';
-import type { ToolResult } from '../types.js';
+import type { EnvName, ToolResult } from '../types.js';
 
 interface SwitchEnvInput {
   env: string;
@@ -20,11 +20,16 @@ export async function switchEnv(input: SwitchEnvInput): Promise<ToolResult> {
     };
   }
 
-  const newUrl = getEnvUrl(input.env);
+  const newUrl = getEnvUrl(input.env as EnvName);
   setSpecUrl(newUrl);
 
   if (input.username && input.password) {
     setCredentials(input.username, input.password);
+  } else {
+    const envPassword = getPasswordForEnv(input.env as EnvName);
+    if (envPassword) {
+      setCredentials(getConfig().username, envPassword);
+    }
   }
 
   const spec = await getSpec();
