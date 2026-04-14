@@ -29,6 +29,14 @@ export async function switchEnv(input: SwitchEnvInput): Promise<ToolResult> {
     const envPassword = getPasswordForEnv(input.env as EnvName);
     if (envPassword) {
       setCredentials(getConfig().username, envPassword);
+    } else {
+      return {
+        isError: true,
+        content: [{
+          type: 'text',
+          text: `No credentials available for environment "${input.env}". Provide username and password explicitly.`,
+        }],
+      };
     }
   }
 
